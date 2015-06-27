@@ -1,0 +1,22 @@
+{
+  "author": {
+    "name": "Gord Allott",
+    "email": "gordallott@gmail.com"
+  },
+  "name": "glux",
+  "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/gordallott/glux.git"
+  },
+  "engines": {
+    "node": ">=0.10"
+  },
+  "dependencies": {
+    "sugar": "*",
+    "restify": "*",
+    "suncalc": "*",
+    "xml2json": "*",
+    "node-hue-api": "*"
+  }
+}
