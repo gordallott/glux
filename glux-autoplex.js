@@ -11,7 +11,7 @@ var plexClient = restify.createStringClient(plexHostname);
 var gluxClient = restify.createJsonClient(gluxHostname);
 
 var DimmingAnimationLength = 20*1000; 		// 20 seconds
-var UnDimmingAnimationLength = 2*1000; 		// 2 seconds
+var UnDimmingAnimationLength = 5*1000; 		// 2 seconds
 var dimTo = 0.2;
 var DimmingAnimationSliceSize = (1.0-dimTo) / (DimmingAnimationLength / 250); 			// 4 ticks a second
 var UnDimmingAnimationSliceSize = (1.0-dimTo) / (UnDimmingAnimationLength / 250);			// 4 ticks a second
