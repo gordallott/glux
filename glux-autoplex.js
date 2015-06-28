@@ -48,9 +48,9 @@ function checkStateAndAnimate(cb) {
 					console.log('(%s) animating to 1.0: %s', state, brightnessState.modified);
 					// plex is not playing and we need to animate from the playing state
 					var apiCall = '/setModifiedBrightness/' + (brightnessState.modified + UnDimmingAnimationSliceSize);
-					gluxClient.get(apiCall, function() {});
 					var timeDiff = (Date.now() - startTimeInMS);
-					setTimeout(checkStateAndAnimate.bind(null, cb), 250 - timeDiff);
+					setTimeout(gluxClient.get.bind(null, apiCall, function() {}), 250 - timeDiff);
+					setTimeout(checkStateAndAnimate.bind(null, cb), 250 - timeDiff); 
 				}
 				else {
 					cb();
@@ -63,6 +63,7 @@ function checkStateAndAnimate(cb) {
 					var apiCall = '/setModifiedBrightness/' + (brightnessState.modified - DimmingAnimationSliceSize);
 					gluxClient.get(apiCall, function () {} );
 					var timeDiff = Date.now() - startTimeInMS;
+					setTimeout(gluxClient.get.bind(null, apiCall, function() {}), 250 - timeDiff);
 					setTimeout(checkStateAndAnimate.bind(null, cb), 250 - timeDiff);
 				}
 				else {
