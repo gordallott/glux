@@ -49,7 +49,7 @@ function checkStateAndAnimate(cb) {
 					// plex is not playing and we need to animate from the playing state
 					var apiCall = '/setModifiedBrightness/' + (brightnessState.modified + UnDimmingAnimationSliceSize);
 					gluxClient.get(apiCall, function() {});
-					var timeDiff = 250 - (Date.now() - startTimeInMS);
+					var timeDiff = (Date.now() - startTimeInMS);
 					setTimeout(checkStateAndAnimate.bind(null, cb), 250 - timeDiff);
 				}
 				else {
