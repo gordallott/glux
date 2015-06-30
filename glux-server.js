@@ -27,7 +27,7 @@ function hueSetBrightness(brightness) {
   console.log("%s - setting brightness to %s", Date.create().format('{hh}:{mm}'), 'off')
   }
   else {
-    state = lightState.create().on().brightness(brightness*100).transition(200);
+    state = lightState.create().on().brightness(brightness*100).transition(500);
     console.log("%s - setting brightness to %s", Date.create().format('{hh}:{mm}'), brightness)
   }
   

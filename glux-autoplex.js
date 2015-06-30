@@ -11,10 +11,11 @@ var plexClient = restify.createStringClient(plexHostname);
 var gluxClient = restify.createJsonClient(gluxHostname);
 
 var DimmingAnimationLength = 20*1000; 		// 20 seconds
-var UnDimmingAnimationLength = 5*1000; 		// 2 seconds
+var UnDimmingAnimationLength = 10*1000; 		// 2 seconds
 var dimTo = 0.2;
-var DimmingAnimationSliceSize = (1.0-dimTo) / (DimmingAnimationLength / 250); 			// 4 ticks a second
-var UnDimmingAnimationSliceSize = (1.0-dimTo) / (UnDimmingAnimationLength / 250);			// 4 ticks a second
+var tickLength = 500;
+var DimmingAnimationSliceSize = (1.0-dimTo) / (DimmingAnimationLength / tickLength); 			// 4 ticks a second
+var UnDimmingAnimationSliceSize = (1.0-dimTo) / (UnDimmingAnimationLength / tickLength);			// 4 ticks a second
 
 function getPlexState(cb) {
 	plexClient.get('/status/sessions', function (err, req, res, data) {
@@ -48,9 +49,9 @@ function checkStateAndAnimate(cb) {
 					console.log('(%s) animating to 1.0: %s', state, brightnessState.modified);
 					// plex is not playing and we need to animate from the playing state
 					var apiCall = '/setModifiedBrightness/' + (brightnessState.modified + UnDimmingAnimationSliceSize);
-					var timeDiff = (Date.now() - startTimeInMS);
-					setTimeout(gluxClient.get.bind(gluxClient, apiCall, function() {}), 250 - timeDiff);
-					setTimeout(checkStateAndAnimate.bind(null, cb), 250 - timeDiff); 
+					var timeDiff = 0;//(Date.now() - startTimeInMS);
+					setTimeout(gluxClient.get.bind(gluxClient, apiCall, function() {}), tickLength - timeDiff);
+					setTimeout(checkStateAndAnimate.bind(null, cb), tickLength - timeDiff); 
 				}
 				else {
 					cb();
@@ -62,9 +63,10 @@ function checkStateAndAnimate(cb) {
 					// plex is playing and we need to dim the lights
 					var apiCall = '/setModifiedBrightness/' + (brightnessState.modified - DimmingAnimationSliceSize);
 					gluxClient.get(apiCall, function () {} );
-					var timeDiff = Date.now() - startTimeInMS;
-					setTimeout(gluxClient.get.bind(gluxClient, apiCall, function() {}), 250 - timeDiff);
-					setTimeout(checkStateAndAnimate.bind(null, cb), 250 - timeDiff);
+					var timeDiff = 0;//Date.now() - startTimeInMS;
+					console.log(Date.now() - startTimeInMS);
+					setTimeout(gluxClient.get.bind(gluxClient, apiCall, function() {}), tickLength - timeDiff);
+					setTimeout(checkStateAndAnimate.bind(null, cb), tickLength - timeDiff);
 				}
 				else {
 					cb();
