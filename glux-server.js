@@ -114,13 +114,13 @@ GluxServer.prototype.sendBrightness = function (brightness) {
   }
   
   for (var i=0; i < hueLights.length; i++) {
-  //  hueApi.setLightState(hueLights[i], state);
+    hueApi.setLightState(hueLights[i], state);
   }
 }
 
 GluxServer.prototype.updateOverride = function(brightness) {
   var self = this;
-  self.override = brightness;
+  self.brightnessState.override = brightness;
   this.setBrightness();
 }
 
@@ -186,7 +186,7 @@ GluxServer.prototype.start = function () {
       animationLength = req.params.animationLength;
     }
 
-    brightness = (brightness === 'reset') ? 0.0 : parseFloat(brightness);
+    brightness = (brightness === 'reset') ? -1.0 : parseFloat(brightness);
     brightness = Math.min(brightness, 1.0);
     if (animationLength > 0) {
       self.updateStateWithAnimation(stateKey, brightness, animationLength);
@@ -202,7 +202,7 @@ GluxServer.prototype.start = function () {
 
   var handleOverrideApi = function (req, res, next) {
     var brightness = req.params.brightness;
-    brightness = (brightness === 'reset') ? 0.0 : parseFloat(brightness);
+    brightness = (brightness === 'reset') ? 1.0 : parseFloat(brightness);
     brightness = Math.min(brightness, 1.0);
 
     self.updateOverride(brightness);
