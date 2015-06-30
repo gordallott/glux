@@ -3,6 +3,7 @@ var config = require('./glux-config');
 
 var restify = require('restify');
 var xml2json = require('xml2json');
+var util = require('util');
 
 var plexHostname = config.plexHostname;
 var gluxHostname = config.gluxHostname;
@@ -11,11 +12,10 @@ var plexClient = restify.createStringClient(plexHostname);
 var gluxClient = restify.createJsonClient(gluxHostname);
 
 var DimmingAnimationLength = 20*1000; 		// 20 seconds
-var UnDimmingAnimationLength = 10*1000; 		// 2 seconds
+var UnDimmingAnimationLength = 10*1000; 		// 10 seconds
 var dimTo = 0.2;
-var tickLength = 500;
-var DimmingAnimationSliceSize = (1.0-dimTo) / (DimmingAnimationLength / tickLength); 			// 4 ticks a second
-var UnDimmingAnimationSliceSize = (1.0-dimTo) / (UnDimmingAnimationLength / tickLength);			// 4 ticks a second
+
+var gluxKey = 'AUTOPLEX';
 
 function getPlexState(cb) {
 	plexClient.get('/status/sessions', function (err, req, res, data) {
@@ -23,7 +23,7 @@ function getPlexState(cb) {
 		data = JSON.parse(xml2json.toJson(data));
 		var state = '';
 		try {
-			state = data.MediaContainer.Video.Player.state;
+			state = data.MediaContainer.Video.Player.state
 		}
 		catch (e) { };
 
@@ -34,7 +34,11 @@ function getPlexState(cb) {
 
 function getGluxState(cb) {
 	gluxClient.get('/', function (err, req, res, obj) {
-		currentBrightnessState = obj;
+		var currentBrightnessState = 0.0; 
+		console.log(obj);
+		if (Object.has(obj.states, gluxKey)) {
+			currentBrightnessState = obj.states[gluxKey].cachedBrightness;
+		}
 		cb(currentBrightnessState);
 	});
 }
@@ -45,36 +49,31 @@ function checkStateAndAnimate(cb) {
 		getGluxState(function (brightnessState) {
 			if (state === '' || state === 'paused' ) {
 				// plex is not playing 
-				if (brightnessState.modified < 1.0) {
-					console.log('(%s) animating to 1.0: %s', state, brightnessState.modified);
+				if (brightnessState < 1.0) {
+					console.log('(%s) animating to 1.0: %s', state, brightnessState);
 					// plex is not playing and we need to animate from the playing state
-					var apiCall = '/setModifiedBrightness/' + (brightnessState.modified + UnDimmingAnimationSliceSize);
-					var timeDiff = 0;//(Date.now() - startTimeInMS);
-					setTimeout(gluxClient.get.bind(gluxClient, apiCall, function() {}), tickLength - timeDiff);
-					setTimeout(checkStateAndAnimate.bind(null, cb), tickLength - timeDiff); 
-				}
-				else {
-					cb();
+
+					var animDiff = (brightnessState - dimTo) / (1.0 - dimTo)
+					var calcTime = UnDimmingAnimationLength - (animDiff * UnDimmingAnimationLength);
+					console.log(calcTime);
+					var apiCall = util.format('/setModifiedBrightness/%s/%d/%d', gluxKey, 1.0, calcTime);
+					gluxClient.get(apiCall, function() {});
 				}
 			}
 			else if (state === 'playing') {
-				if (brightnessState.modified > dimTo) {
-					console.log('(%s) animating to %s: %s', state, dimTo, brightnessState.modified);
+				if (brightnessState > dimTo) {
+					console.log('(%s) animating to %s: %s', state, dimTo, brightnessState);
 					// plex is playing and we need to dim the lights
-					var apiCall = '/setModifiedBrightness/' + (brightnessState.modified - DimmingAnimationSliceSize);
+
+					var animDiff = (brightnessState - dimTo) / (1.0 - dimTo)
+					var calcTime = DimmingAnimationLength * animDiff;
+					console.log(calcTime);
+					var apiCall = util.format('/setModifiedBrightness/%s/%d/%d', gluxKey, dimTo, calcTime);
 					gluxClient.get(apiCall, function () {} );
-					var timeDiff = 0;//Date.now() - startTimeInMS;
-					console.log(Date.now() - startTimeInMS);
-					setTimeout(gluxClient.get.bind(gluxClient, apiCall, function() {}), tickLength - timeDiff);
-					setTimeout(checkStateAndAnimate.bind(null, cb), tickLength - timeDiff);
-				}
-				else {
-					cb();
 				}
 			}
-			else {
-				cb();
-			}
+			
+			cb();
 		});
 	});
 }

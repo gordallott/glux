@@ -9,22 +9,104 @@ var hueUsername = config.hueUsername;
 var hueApi = new HueApi(hueHostname, hueUsername);
 var hueLights = [1,2,3];
 
-function hueLoginCheck(hostname, username) {
-  return hueApi.config().then(function (res) {
-    if (Object.has(res, 'mac') == false) {
-      console.log("Could not login");
-    }
-    else {
-      console.log("logged in");
-    }
+/* --- BrightnessState object --- */
+var BrightnessState = function () {
+  this.brightness = 0.0;
+  this.animationStart = -1;
+  this.animationLength = -1;
+  this.animationTargetBrightness = -1;
+  this.cachedBrightness = 0.0;
+}
+
+BrightnessState.prototype.isAnimating = function () {
+  var result = (this.animationStart > 0);
+  return result 
+}
+
+BrightnessState.prototype.getBrightness = function () {
+  var self = this;
+
+  if (self.isAnimating() === false) {
+    return self.brightness;
+  }
+
+  // animating so calculate the animated brightness
+  var timelinePosition = Math.max(Math.min((Date.now() - self.animationStart) / self.animationLength, 1.0), 0.0);
+  if (timelinePosition >= 1.0) {
+    self.setFixedBrightness(self.animationTargetBrightness);
+    return self.brightness;
+  }
+  
+  this.cachedBrightness = self.brightness + ((self.animationTargetBrightness - self.brightness) * timelinePosition);
+  return this.cachedBrightness;
+}
+
+BrightnessState.prototype.setAnimation = function (targetBrightness, length) {
+  var self = this;
+  if (targetBrightness === self.brightness) return;
+
+  self.setFixedBrightness(self.getBrightness());
+
+  self.animationStart = Date.now();
+  self.animationLength = length;
+
+  self.animationTargetBrightness = targetBrightness;
+}
+
+BrightnessState.prototype.setFixedBrightness = function (brightness) {
+  this.brightness = brightness;
+  this.animationStart = -1;
+  this.animationLength = -1;
+  this.animationTargetBrightness = -1;
+  this.cachedBrightness = brightness;
+}
+/* --- BrightnessState object --- */
+
+/* --- GluxServer object --- */
+
+
+var GluxServer = function () {
+  var self = this;
+  self.brightnessState = {
+    'states': {},
+    'override': null,
+    'cachedBrightness': 0.0
+  };
+
+  self.timelineIsRunning = false;
+}
+
+GluxServer.prototype.calculateBrightness = function(brightnessState) {
+  if (brightnessState.override !== null) {
+    return brightnessState.override;
+  }
+
+  // otherwise we multiply all the modified brightnesses together
+  if (Object.values(brightnessState.states).length <= 0) {
+    return 0.0;
+  }
+
+  if (Object.values(brightnessState.states).length === 1) {
+    return Object.values(brightnessState.states)[0].getBrightness();
+  }
+
+  return Object.values(brightnessState.states).reduce(function(a, b) { 
+    return a.getBrightness() * b.getBrightness(); 
   });
 }
 
-function hueSetBrightness(brightness) {
+GluxServer.prototype.setBrightness = function () {
+  var self = this;
+  var brightness = self.calculateBrightness(self.brightnessState);
+  self.sendBrightness(brightness);
+  self.checkTimeline();
+}
+
+GluxServer.prototype.sendBrightness = function (brightness) {
   var state;
   if (brightness < 0) {
     state = lightState.create().off();
-  console.log("%s - setting brightness to %s", Date.create().format('{hh}:{mm}'), 'off')
+    console.log("%s - setting brightness to %s", Date.create().format('{hh}:{mm}'), 'off')
   }
   else {
     state = lightState.create().on().brightness(brightness*100).transition(500);
@@ -32,87 +114,130 @@ function hueSetBrightness(brightness) {
   }
   
   for (var i=0; i < hueLights.length; i++) {
-    hueApi.setLightState(hueLights[i], state);
+  //  hueApi.setLightState(hueLights[i], state);
   }
 }
 
-
-hueLoginCheck().then(function() {
-  //return hueSetBrightness(0);
-}).then(function() {
-  console.log("done things");
-});
-
-var Brightness = {
-  'base': 1.0,
-  'modified': 1.0,
-  'override': null
+GluxServer.prototype.updateOverride = function(brightness) {
+  var self = this;
+  self.override = brightness;
+  this.setBrightness();
 }
 
-function calcAndSendBrightness(brightnessObj) {
-
-  var totalBrightness = brightnessObj.base * brightnessObj.modified; 
-  if (brightnessObj.override !== null) {
-    totalBrightness = brightnessObj.override;
+GluxServer.prototype.updateState = function(stateKey, brightness) {
+  var self = this;
+  console.log(stateKey, brightness);
+  if (Object.has(self.brightnessState.states, stateKey) === false) {
+    self.brightnessState.states[stateKey] = new BrightnessState();
   }
 
-  hueSetBrightness(totalBrightness);
+  self.brightnessState.states[stateKey].setFixedBrightness(brightness);
+  this.setBrightness();
 }
 
-function setBaseBrightness(req, res, next) {
-  console.log('base brightness, ' + req.params.brightness);
-
-  var brightness = req.params.brightness;
-  brightness = (brightness === 'reset') ? 1.0 : parseFloat(brightness);
-  
-  brightness = Math.min(brightness, 1.0);
-  Brightness.base = brightness;
-  calcAndSendBrightness(Brightness);
-  respond(req, res, next);
-}
-
-function setModifiedBrightness(req, res, next) {
-
-  var brightness = req.params.brightness;
-  brightness = (brightness === 'reset') ? 1.0 : parseFloat(brightness);
-  brightness = Math.min(brightness, 1.0);
-
-  Brightness.modified = brightness;
-  calcAndSendBrightness(Brightness);
-  respond(req, res, next);
-}
-
-function setOverrideBrightness(req, res, next) {
-  var brightness = req.params.brightness;
-  brightness = (brightness === 'reset') ? null : parseFloat(brightness);
-  if (brightness !== null) {
-    brightness = Math.min(req.params.brightness, 1.0);
+GluxServer.prototype.updateStateWithAnimation = function (stateKey, brightness, length) {
+  var self = this;
+  if (Object.has(self.brightnessState.states, stateKey) === false) {
+    self.brightnessState.states[stateKey] = new BrightnessState();
   }
 
-  Brightness.override = brightness;
-  calcAndSendBrightness(Brightness)
-  respond(req, res, next);
+  self.brightnessState.states[stateKey].setAnimation(brightness, length);
+  this.setBrightness();
 }
 
-
-var apis = {
-  '/setBaseBrightness/:brightness': setBaseBrightness,
-  '/setModifiedBrightness/:brightness': setModifiedBrightness,
-  '/setOverrideBrightness/:brightness': setOverrideBrightness
+GluxServer.prototype.checkShouldAnimate = function() {
+  var self = this;
+  return Object.values(self.brightnessState.states).any(function (v) {
+    return v.isAnimating();
+  });
 }
 
-function respond(req, res, next) {
-  res.send(Brightness);
-  next();
+GluxServer.prototype.tickFunc = function () {
+  var self = this;
+
+  var shouldAnimate = self.checkShouldAnimate();
+  if (shouldAnimate === false) {
+    self.timelineIsRunning = false;
+    return;
+  }
+
+  self.timelineIsRunning = true;
+  self.setBrightness();
+  setTimeout(self.tickFunc.bind(self), 500)
 }
 
-var server = restify.createServer();
-server.get('/', respond);
+GluxServer.prototype.checkTimeline = function () {
+  var self = this;
+  if (self.timelineIsRunning === true || self.checkShouldAnimate() === false) {
+    return;
+  }
 
-Object.each(apis, function (uri, fn) {
-  server.get(uri, fn);
-})
+  self.tickFunc();
+}
 
-server.listen(8080, function() {
-  console.log('%s, listening at %s', server.name, server.url);
-});
+GluxServer.prototype.start = function () {
+  var self = this;
+
+  var handleBrightnessApi = function (req, res, next) {
+    var stateKey = req.params.stateKey;
+    var brightness = req.params.brightness;
+    var animationLength = 0.0;
+    if (Object.has(req.params, 'animationLength')) {
+      animationLength = req.params.animationLength;
+    }
+
+    brightness = (brightness === 'reset') ? 0.0 : parseFloat(brightness);
+    brightness = Math.min(brightness, 1.0);
+    if (animationLength > 0) {
+      self.updateStateWithAnimation(stateKey, brightness, animationLength);
+    }
+    else {
+      self.updateState(stateKey, brightness);
+    }
+
+    self.brightnessState.cachedBrightness = self.calculateBrightness(self.brightnessState);
+    res.send(self.brightnessState)
+    next();
+  };
+
+  var handleOverrideApi = function (req, res, next) {
+    var brightness = req.params.brightness;
+    brightness = (brightness === 'reset') ? 0.0 : parseFloat(brightness);
+    brightness = Math.min(brightness, 1.0);
+
+    self.updateOverride(brightness);
+    self.brightnessState.cachedBrightness = self.calculateBrightness(self.brightnessState);
+    res.send(self.brightnessState)
+    next();
+  }
+
+  var apis = {
+    '/setModifiedBrightness/:stateKey/:brightness/': handleBrightnessApi,
+    '/setModifiedBrightness/:stateKey/:brightness/:animationLength': handleBrightnessApi,
+    '/setOverrideBrightness/:brightness': handleOverrideApi,
+    '/': function(req, res, next) { 
+      Object.values(self.brightnessState.states).each(function (v) {
+        return v.getBrightness();
+      });
+      self.brightnessState.cachedBrightness = self.calculateBrightness(self.brightnessState);
+      res.send(self.brightnessState); 
+      next();
+    }
+  }
+
+  self.server = restify.createServer();
+
+  Object.each(apis, function (uri, fn) {
+    self.server.get(uri, fn);
+  });
+
+  self.server.listen(8080, function() {
+    console.log('%s, listening at %s', self.server.name, self.server.url);
+  });
+}
+
+/* --- GluxServer object --- */
+
+
+var server = new GluxServer();
+server.start();
