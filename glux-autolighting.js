@@ -27,7 +27,7 @@ if (timeTillSunset <= fadeInTime && timeTillSunset > 0) {
 		var brightness = 1.0 - (timeTillSunset / fadeInTime); // fuck it lets just make it linear even though it shouldn't be
 		client.get(util.format('/setModifiedBrightness/%s/%s', gluxKey, brightness), function () {});
 
-		if (currentBrightnessState.override != null) {
+		if (timeTillSunset >= fadeInTime-1) {
 			client.get('/setOverrideBrightness/reset', function () {} )
 		}
 
