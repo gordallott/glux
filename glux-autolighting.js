@@ -10,6 +10,8 @@ var times = suncalc.getTimes(new Date(), location[0], location[1]);
 var timeTillSunset = times.sunset.minutesFromNow();
 var gluxKey = 'AUTOSUNSET';
 
+var maxBrightness = 0.8
+
 if (timeTillSunset > fadeInTime) {
 	console.log('Minutes until sunset: ' + timeTillSunset);
 }
@@ -24,7 +26,7 @@ if (timeTillSunset <= fadeInTime && timeTillSunset > 0) {
 		currentBrightnessState = obj;
 		console.log(currentBrightnessState);
 
-		var brightness = 1.0 - (timeTillSunset / fadeInTime); // fuck it lets just make it linear even though it shouldn't be
+		var brightness = maxBrightness - ((timeTillSunset / fadeInTime) - (1.0 - maxBrightness)); // fuck it lets just make it linear even though it shouldn't be
 		client.get(util.format('/setModifiedBrightness/%s/%s', gluxKey, brightness), function () {});
 
 		if (timeTillSunset >= fadeInTime-1) {
